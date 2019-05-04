@@ -1,45 +1,59 @@
+import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
-import java.util.Scanner;
 
 public class BTree
 {
-	static String filename="Index.bin";
-	static void addNode(RandomAccessFile raf,int f,int p,int k,int o,int p1,int k1,int o1,int p2,int byteoffset)
+	
+	static void addNode(RandomAccessFile raf, Node n)
 	{
 		try
 		{
-			raf.seek(byteoffset);
-			raf.writeInt(f);
-			raf.writeInt(p);
-			raf.writeInt(k);
-			raf.writeInt(o);
-			raf.writeInt(p1);
-			raf.writeInt(k1);
-			raf.writeInt(o1);
-			raf.writeInt(p2);
+			raf.writeInt(n.getLeaf());
+			raf.writeInt(n.getLeftChild());
+			raf.writeInt(n.getFirstKey());
+			raf.writeInt(n.getFirstOffset());
+			raf.writeInt(n.getMiddleChild());
+			raf.writeInt(n.getSecondKey());
+			raf.writeInt(n.getSecondOffset());
+			raf.writeInt(n.getRightChild());
 		}
 		catch(Exception e)
 		{
-			System.out.println("Cannot Add Node" + "    " + k);
+			System.out.println("Cannot Add Node");
 		}
 	}
-	static void incrementnode(String f)
+	static Node readNode(RandomAccessFile raf) throws IOException
+	{
+		Node node = new Node();
+		node.setIsLeaf(raf.readInt());
+		node.setLeftChild(raf.readInt());
+		node.setFirstKey(raf.readInt());
+		node.setFirstOffset(raf.readInt());
+		node.setMiddleChild(raf.readInt());
+		node.setSecondKey(raf.readInt());
+		node.setSecondOffset(raf.readInt());
+		node.setRightChild(raf.readInt());
+		return node;
+		
+		
+	}
+	static void incrementCounter(String fileName)
 	{
 		try
 		{
-			RandomAccessFile raf=new RandomAccessFile(f,"rw");
+			RandomAccessFile raf=new RandomAccessFile(fileName,"rw");
 			int len=(int)raf.length();
 			int recs=len/32;
+			raf.seek(8); //1st key
+			int counter=raf.readInt();
+			counter++;
 			raf.seek(8);
-			int node=raf.readInt();
-			node++;
-			raf.seek(8);
-			if(recs==node)
+			if(recs==counter)
 			{
-				node=-1;
+				counter=-1;
 			}
-			raf.writeInt(node);
+			raf.writeInt(counter);
 			raf.close();
 		}
 		catch(Exception e)
@@ -47,12 +61,12 @@ public class BTree
 			System.out.println("NO");
 		}
 	}
-	static void CreateIndexFile(String filename,int NumberofRecords)
+	static void CreateIndexFile(String fileName,int NumberOfRecords)
 	{
 		try
 		{
-			RandomAccessFile raf=new RandomAccessFile(filename,"rw");
-			for(int i=0;i<NumberofRecords-1;i++)
+			RandomAccessFile raf=new RandomAccessFile(fileName,"rw");
+			for(int i=0;i<NumberOfRecords-1;i++)
 			{
 				raf.writeInt(0);
 				raf.writeInt(0);
@@ -137,12 +151,14 @@ public class BTree
 			System.out.println("Cannot Empty File");
 		}
 	}
-	static void InsertNewRecordAtIndex(String filename,int key,int byteoffset)
+	
+	static void InsertNewRecordAtIndex(String filename,int key,int byteOffset)
 	{
 		try
 		{
 			RandomAccessFile raf=new RandomAccessFile(filename,"rw");
 			raf.seek(8);
+			Node input;
 			int nodenum=raf.readInt();
 			if(nodenum==-1)
 			{
@@ -150,45 +166,39 @@ public class BTree
 			}
 			else
 			{
-				if(nodenum==1)
+				if(nodenum==1) //addRoot
 				{
 					raf.seek(32);
-					raf.writeInt(0);
-					raf.writeInt(-1);
-					raf.writeInt(key);
-					raf.writeInt(key);
-					incrementnode(filename);
+					input = new Node(0,-1,key,byteOffset,0,0,0,0);
+					addNode(raf,input);
+					incrementCounter(filename);
 				}
 				else
 				{
-					raf.seek(((nodenum-1)*32)+20);
-					int k=raf.readInt();
+					raf.seek(((nodenum-1)*32));
+					Node node = readNode(raf);
+					node.print();
+					int k = node.getSecondKey();
 					if(k==0)
 					{
-						raf.seek(((nodenum-1)*32)+8);
-						int keycmp=raf.readInt();
-						if(key>keycmp)
+						int keycmp=node.getFirstKey();
+						if(key>keycmp) //add to its right right
 						{
-						raf.seek(((nodenum-1)*32)+20);
-						raf.writeInt(key);
-						raf.writeInt(key);
-						raf.writeInt(0);
+						input = new Node(node.getLeaf(),node.getLeftChild(),node.getFirstKey(),node.getFirstOffset(),node.getMiddleChild(),key,byteOffset,0);
+						raf.seek(((nodenum-1)*32));
+						addNode(raf,input);
 						}
-						else
+						else //swap smaller to the left bigger to the right
 						{
-							raf.seek(((nodenum-1)*32)+4);
-							int p=raf.readInt();
-							raf.readInt();
-							raf.readInt();
-							int p1=raf.readInt();
+							input = new Node(node.getLeaf(),node.getLeftChild(),key,byteOffset,node.getMiddleChild(),node.getFirstKey(),node.getFirstOffset(),0);
 							raf.seek((nodenum-1)*32);
-							addNode(raf,1,p,key,key,p1,keycmp,keycmp,0,(nodenum-1)*32);
+							addNode(raf,input);
 						}
 					}
-					else
+					else //recode already has 2 keys
 					{
-						splitNode(filename,nodenum,key);
-						incrementnode(filename);
+						splitNode(filename,nodenum,key,byteOffset);
+						incrementCounter(filename);
 					}
 				}
 			}
@@ -199,26 +209,31 @@ public class BTree
 			System.out.println("Cannot Insert");
 		}
 	}
-	public static void splitNode(String filename,int nodenum,int key)
+	public static void splitNode(String filename,int nodenum,int key,int byteOffset)
 	{
 		try
 		{
 			RandomAccessFile raf=new RandomAccessFile(filename,"rw");
-			raf.seek((32*(nodenum-1))+8);
-			int key1=raf.readInt();
-			System.out.println("  key1  " + key1);
-			raf.seek((32*(nodenum-1))+20);
-			int key2=raf.readInt();
-			System.out.println("  key2  " + key2);
-			int arr[]= {key,key1,key2};
+			raf.seek(((nodenum-1)*32)); 
+			Node node = readNode(raf);
+			int arr[]= {key,node.getFirstKey(),node.getSecondKey()};
 			Arrays.sort(arr);
-			int byteoffset=32*(nodenum-1);
-			addNode(raf,1,nodenum,arr[1],arr[1],nodenum+1,0,0,0,byteoffset);
-			byteoffset=32*nodenum;
-			addNode(raf,0,-1,arr[0],arr[0],-1,0,0,0,byteoffset);
-			raf.seek(32*(nodenum+1));
-			byteoffset=32*(nodenum+1);
-			addNode(raf,0,-1,arr[2],arr[2],-1,0,0,0,byteoffset);
+			
+			int pos=32*(nodenum-1);
+			Node parent = new Node(1,nodenum,arr[1],node.getSecondOffset(),nodenum+1,0,0,0);
+			raf.seek(pos);
+			addNode(raf,parent);
+			
+			pos=32*(nodenum);
+			Node leftChild = new Node(0,-1,arr[0],node.getFirstOffset(),-1,0,0,0);
+			raf.seek(pos);
+			addNode(raf,leftChild);
+			
+			
+			pos=32*(nodenum+1);
+			Node rightChild = new Node(0,-1,arr[2],byteOffset,-1,0,0,0);
+			raf.seek(pos);
+			addNode(raf,rightChild);
 			raf.close();
 		}
 		catch(Exception e)
@@ -226,54 +241,5 @@ public class BTree
 			System.out.println("Cannot Split");
 		}
 	}
-	public static void main(String[] args)
-	{
-		Scanner scan=new Scanner(System.in);
-		while(true)
-		{
-			System.out.println("1- Create Record File"
-					+ "\n2- Insert Record"
-					+ "\n3- Search Record"
-					+ "\n4- Display Whole File"
-					+ "\n5- Empty File"
-					+ "\n6- Exit");
-			int x=scan.nextInt();
-			if(x==1)
-			{
-				if(isEmpty(filename))
-				{
-					System.out.println("Enter Number of Records");
-					int recs=scan.nextInt();
-					CreateIndexFile(filename, recs);
-				}
-				else
-				{
-					System.out.println("File Already Exists\nCannot Create New File\n");
-				}
-			}
-			else if(x==2)
-			{
-				System.out.println("Enter Key");
-				int key=scan.nextInt();
-				InsertNewRecordAtIndex(filename,key,32);
-			}
-			/*else if(x==3)
-			{
-				System.out.println("Enter Value to be Searched on.");
-				int key=scan.nextInt();
-				int search=SearchRecordIndex(filename,key);
-				if(search==-1)
-				{
-					System.out.println("Cannot Find Key");
-				}
-			}*/
-			else if(x==4)
-				DisplayIndexFileContent(filename);
-			else if(x==5)
-				emptyFile(filename);
-			else if(x==6)
-				break;
-		}
-		scan.close();
+	
 	}
-}
