@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 
 public class BTree
 {
@@ -151,7 +152,57 @@ public class BTree
 			System.out.println("Cannot Empty File");
 		}
 	}
-	
+	static int SearchRecordInIndex(String filename,int RecordID,int byteoffset)
+	{
+		try
+		{
+			RandomAccessFile raf=new RandomAccessFile(filename,"r");
+			raf.seek(byteoffset);
+			Node n=readNode(raf);
+			int key1=n.getFirstKey();
+			int key2=n.getSecondKey();
+			System.out.println("key1 " + key1);
+			System.out.println("key2 " + key2);
+			System.out.println("Record id " + RecordID);
+			TimeUnit.SECONDS.sleep(1);
+			if(key1==RecordID || key2==RecordID)
+			{
+				raf.close();
+				if(key1==RecordID)
+				{
+					return key1;
+				}
+				if(key2==RecordID)
+				{
+						return key2;
+				}
+			}
+			if(key1<RecordID && n.getMiddleChild()!=-1)
+			{
+				System.out.println("First" + byteoffset);
+				byteoffset=32*n.getMiddleChild();
+				SearchRecordInIndex(filename,RecordID,byteoffset);
+			}
+			if(key1>RecordID && n.getLeftChild()!=-1)
+			{
+				byteoffset=32*n.getLeftChild();
+				SearchRecordInIndex(filename,RecordID,byteoffset);
+			}
+			if(key2<RecordID && n.getRightChild()!=-1)
+			{
+				System.out.println("Third" + byteoffset);
+				byteoffset=32*n.getRightChild();
+				SearchRecordInIndex(filename,RecordID,byteoffset);
+			}
+			raf.close();
+			return -1;	
+		}
+		catch(Exception e)
+		{
+			System.out.println("Cannot Search");
+			return -1;
+		}
+	}
 	static void InsertNewRecordAtIndex(String filename,int key,int byteOffset)
 	{
 		try
@@ -202,7 +253,24 @@ public class BTree
 					}
 				}
 			}
-			raf.close();
+			/*Node n1=new Node(1,6,4,2,7,-1,-1,-1);
+			Node n2=new Node(0,-1,1,1,-1,-1,-1,-1);
+			Node n3=new Node(0,-1,3,3,-1,-1,-1,-1);
+			Node n4=new Node(0,-1,5,5,-1,-1,-1,-1);
+			Node n5=new Node(0,-1,7,7,-1,-1,-1,-1);
+			Node n6=new Node(1,2,2,2,3,-1,-1,-1);
+			Node n7=new Node(1,4,6,6,5,8,8,8);
+			Node n8=new Node(0,-1,9,9,-1,10,10,-1);
+			raf.seek(32);
+			addNode(raf,n1);
+			addNode(raf,n2);
+			addNode(raf,n3);
+			addNode(raf,n4);
+			addNode(raf,n5);
+			addNode(raf,n6);
+			addNode(raf,n7);
+			addNode(raf,n8);
+			raf.close();*/
 		}
 		catch(Exception e)
 		{
