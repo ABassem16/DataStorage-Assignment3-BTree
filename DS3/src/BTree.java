@@ -1,6 +1,10 @@
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
+import java.util.Stack;
+import java.util.TreeMap;
+import java.util.HashMap;
+import java.util.Map;
 
 public class BTree
 {
@@ -157,6 +161,7 @@ public class BTree
 		try
 		{
 			RandomAccessFile raf=new RandomAccessFile(filename,"rw");
+			Stack<Integer> visitedIndices = new Stack<>();
 			raf.seek(8);
 			Node input;
 			int nodenum=raf.readInt();
@@ -175,30 +180,84 @@ public class BTree
 				}
 				else
 				{
-					raf.seek(((nodenum-1)*32));
-					Node node = readNode(raf);
-					node.print();
-					int k = node.getSecondKey();
-					if(k==0)
+					raf.seek(32);
+					Node current = readNode(raf);
+					//Node parent = current;
+					visitedIndices.push(32);
+					//int parentPosition = 32;
+					while(true)
 					{
-						int keycmp=node.getFirstKey();
-						if(key>keycmp) //add to its right right
+						if(current.getSecondKey() == 0 && current.IsLeaf())
 						{
-						input = new Node(node.getLeaf(),node.getLeftChild(),node.getFirstKey(),node.getFirstOffset(),node.getMiddleChild(),key,byteOffset,0);
-						raf.seek(((nodenum-1)*32));
-						addNode(raf,input);
-						}
-						else //swap smaller to the left bigger to the right
+							if(key>current.getFirstKey()) //add to its right right
+							{
+								input = new Node(current.getLeaf(),0,current.getFirstKey(),current.getFirstOffset(),0,key,byteOffset,0);
+								raf.seek(((nodenum-1)*32));
+								addNode(raf,input);
+								break;
+							}
+							else //swap smaller to the left bigger to the right
+							{
+								input = new Node(current.getLeaf(),0,key,byteOffset,0,current.getFirstKey(),current.getFirstOffset(),0);
+								raf.seek((nodenum-1)*32);
+								addNode(raf,input);
+								break;
+							}
+						}else if(current.getSecondKey() == 0 && !current.IsLeaf())
 						{
-							input = new Node(node.getLeaf(),node.getLeftChild(),key,byteOffset,node.getMiddleChild(),node.getFirstKey(),node.getFirstOffset(),0);
-							raf.seek((nodenum-1)*32);
-							addNode(raf,input);
+							if(key < current.getFirstKey())
+							{   
+								
+								int position = current.getLeftChild()*32;
+								raf.seek(current.getLeftChild()*32);
+								current = readNode(raf);
+								visitedIndices.push(position);
+							}
+							else
+							{
+								/*parent = current;
+								parentPosition = (int) raf.getFilePointer();*/
+								int position = current.getMiddleChild();
+								raf.seek(current.getMiddleChild()*32);
+								current = readNode(raf);
+								visitedIndices.push(position);
+							}
+							
+						}else if(!(current.getSecondKey() == 0) && !current.IsLeaf())
+						{
+							if(key < current.getFirstKey())
+							{   /*parent = current;
+								parentPosition = (int) raf.getFilePointer();*/
+								int position = current.getLeftChild()*32;
+								raf.seek(current.getLeftChild()*32);
+								current = readNode(raf);
+								visitedIndices.push(position);
+							}
+							else if (key > current.getSecondKey())
+							{
+								/*parent = current;
+								parentPosition = (int) raf.getFilePointer();*/
+								int position = current.getRightChild()*32;
+								raf.seek(current.getRightChild()*32);
+								current = readNode(raf);
+								visitedIndices.push(position);
+							}else 
+							{
+								/*parent = current;
+								parentPosition = (int) raf.getFilePointer();*/
+								int position = current.getMiddleChild()*32;
+								raf.seek(current.getMiddleChild()*32);
+								current = readNode(raf);
+								visitedIndices.push(position);
+							}
+							
 						}
-					}
-					else //recode already has 2 keys
-					{
-						splitNode(filename,nodenum,key,byteOffset);
-						incrementCounter(filename);
+						else
+						{
+							splitNode(raf,nodenum,key,byteOffset,visitedIndices);
+							incrementCounter(filename);
+						}
+						
 					}
 				}
 			}
@@ -209,36 +268,142 @@ public class BTree
 			System.out.println("Cannot Insert");
 		}
 	}
-	public static void splitNode(String filename,int nodenum,int key,int byteOffset)
+	public static int splitNode(RandomAccessFile raf,int nodenum,int key,int byteOffset,Stack<Integer> st)
 	{
 		try
 		{
-			RandomAccessFile raf=new RandomAccessFile(filename,"rw");
-			raf.seek(((nodenum-1)*32)); 
+			
+			int nodePosition = st.peek();
+			raf.seek(nodePosition); 
 			Node node = readNode(raf);
-			int arr[]= {key,node.getFirstKey(),node.getSecondKey()};
-			Arrays.sort(arr);
+			int keys[] = {};
+			int offsets[] = {};
+			HashMap<Integer,Integer> map = new HashMap<>();
 			
-			int pos=32*(nodenum-1);
-			Node parent = new Node(1,nodenum,arr[1],node.getSecondOffset(),nodenum+1,0,0,0);
-			raf.seek(pos);
-			addNode(raf,parent);
+			map.put(node.getFirstKey(), node.getFirstOffset());
+			map.put(key, byteOffset);
+			map.put(node.getSecondKey(), node.getSecondOffset());
 			
-			pos=32*(nodenum);
-			Node leftChild = new Node(0,-1,arr[0],node.getFirstOffset(),-1,0,0,0);
-			raf.seek(pos);
-			addNode(raf,leftChild);
+			Map<Integer, Integer> sortedMap = new TreeMap<>(map);
+			int i = 0;
+			for (Map.Entry<Integer, Integer> entry : sortedMap.entrySet()) {
+			    System.out.println(entry.getKey() + "/" + entry.getValue());
+			    keys[i] = entry.getKey();
+			    offsets[i] = entry.getValue();
+			    i++;
+			}
+			if(nodePosition == 32 && node.getSecondKey() != 0)
+			{
+				splitRoot(raf,nodenum,key,byteOffset,keys,offsets);
+				return 0; 
+			}else if(nodePosition == 32 && node.getSecondKey() == 0)
+			{
+				
+			}
+			st.pop();
+			int parentPosition = st.peek();
+			raf.seek(parentPosition);
+			Node parent = readNode(raf);
+			if(parent.getSecondKey() == 0 && key > parent.getFirstKey())
+			{
+				int leftPosition=32*(nodenum);
+				Node leftChild = new Node(0,0,keys[0],offsets[0],0,0,0,0);
+				raf.seek(leftPosition);
+				addNode(raf,leftChild);
+				
+				int rightPosition=32*(nodenum+1);
+				Node rightChild = new Node(0,0,keys[2],offsets[2],0,0,0,0);
+				raf.seek(rightPosition);
+				addNode(raf,rightChild);
+				
+				Node newParent = new Node(1,parent.getLeftChild(),parent.getFirstKey(),parent.getFirstOffset(),leftPosition/32,keys[1],offsets[1],rightPosition/32);
+				raf.seek(parentPosition);
+				addNode(raf,newParent);
+				raf.close();
+				return 0;
+				
+			}else if(parent.getSecondKey() == 0 && key < parent.getFirstKey())
+			{
+				int leftPosition=32*(nodenum);
+				Node leftChild = new Node(0,0,keys[0],offsets[0],0,0,0,0);
+				raf.seek(leftPosition);
+				addNode(raf,leftChild);
+				
+				int rightPosition=32*(nodenum+1);
+				Node rightChild = new Node(0,0,keys[2],offsets[2],0,0,0,0);
+				raf.seek(rightPosition);
+				addNode(raf,rightChild);
+				
+				Node newParent = new Node(1,leftPosition/32,keys[1],offsets[1],rightPosition/32,parent.getFirstKey(),parent.getFirstOffset(),parent.getRightChild());
+				raf.seek(parentPosition);
+				addNode(raf,newParent);
+				raf.close();
+				return 0;
+			}
+			else
+			{
+				int leftPosition=32*(nodenum);
+				Node leftChild = new Node(0,0,keys[0],offsets[0],0,0,0,0);
+				raf.seek(leftPosition);
+				addNode(raf,leftChild);
+				
+				int rightPosition=32*(nodenum+1);
+				Node rightChild = new Node(0,0,keys[2],offsets[2],0,0,0,0);
+				raf.seek(rightPosition);
+				addNode(raf,rightChild);
+				
+				splitNode(raf,nodenum,keys[1],offsets[1],st);
+				raf.close();
+				return 0;
+			}
 			
 			
-			pos=32*(nodenum+1);
-			Node rightChild = new Node(0,-1,arr[2],byteOffset,-1,0,0,0);
-			raf.seek(pos);
-			addNode(raf,rightChild);
-			raf.close();
 		}
 		catch(Exception e)
 		{
 			System.out.println("Cannot Split");
+			return 0;
+		}
+	}
+	static void splitRoot(RandomAccessFile raf,int nodenum, int key, int byteOffset, int[] keys, int offsets[])
+	{
+		raf.seek(32);
+		Node root = readNode(raf);
+		if(key > root.getFirstKey())
+		{
+			int leftPosition=32*(nodenum);
+			Node newLeftChild = new Node(1,root.getLeftChild(),keys[0],offsets[0],root.getMiddleChild(),0,0,0);
+			raf.seek(leftPosition);
+			addNode(raf,newLeftChild);
+			
+			int rightPosition=32*(nodenum+1);
+			Node newRightChild = new Node(1,root.g,keys[2],offsets[2],0,0,0,0);
+			raf.seek(rightPosition);
+			addNode(raf,newRightChild);
+			
+			Node newRoot = new Node(1,parent.getLeftChild(),parent.getFirstKey(),parent.getFirstOffset(),leftPosition/32,keys[1],offsets[1],rightPosition/32);
+			raf.seek(parentPosition);
+			addNode(raf,newParent);
+			raf.close();
+			return 0;
+			
+		}else if(parent.getSecondKey() == 0 && key < parent.getFirstKey())
+		{
+			int leftPosition=32*(nodenum);
+			Node leftChild = new Node(0,0,keys[0],offsets[0],0,0,0,0);
+			raf.seek(leftPosition);
+			addNode(raf,leftChild);
+			
+			int rightPosition=32*(nodenum+1);
+			Node rightChild = new Node(0,0,keys[2],offsets[2],0,0,0,0);
+			raf.seek(rightPosition);
+			addNode(raf,rightChild);
+			
+			Node newParent = new Node(1,leftPosition/32,keys[1],offsets[1],rightPosition/32,parent.getFirstKey(),parent.getFirstOffset(),parent.getRightChild());
+			raf.seek(parentPosition);
+			addNode(raf,newParent);
+			raf.close();
+			return 0;
 		}
 	}
 	
