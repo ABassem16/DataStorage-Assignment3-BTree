@@ -440,4 +440,50 @@ public class BTree
 		return -1;
 		
 	}
+	static int SearchRecordInIndex(String filename,int RecordID,int byteoffset)
+	{
+		try
+		{
+			RandomAccessFile raf=new RandomAccessFile(filename,"r");
+			raf.seek(byteoffset);
+			Node n=readNode(raf);
+			int key1=n.getFirstKey();
+			int key2=n.getSecondKey();
+			if(key1==RecordID || key2==RecordID)
+			{
+				raf.close();
+				if(key1==RecordID)
+				{
+					return key1;
+				}
+				if(key2==RecordID)
+				{
+						return key2;
+				}
+			}
+			if(key1<RecordID && n.getMiddleChild()!=0)
+			{
+				byteoffset=32*n.getMiddleChild();
+				SearchRecordInIndex(filename,RecordID,byteoffset);
+			}
+			if(key1>RecordID && n.getLeftChild()!=0)
+			{
+				byteoffset=32*n.getLeftChild();
+				SearchRecordInIndex(filename,RecordID,byteoffset);
+			}
+			if(key2<RecordID && n.getRightChild()!=0)
+			{
+				byteoffset=32*n.getRightChild();
+				SearchRecordInIndex(filename,RecordID,byteoffset);
+			}
+			raf.close();
+			return -1;	
+		}
+		catch(Exception e)
+		{
+			System.out.println("Cannot Search");
+			return -1;
+		}
+	}
+
 	}	

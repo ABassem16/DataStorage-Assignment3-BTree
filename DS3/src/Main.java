@@ -6,7 +6,6 @@ public class Main {
 	public static void main(String[] args) throws IOException
 	{
 		String filename="Index.bin";
-		
 		Scanner scan=new Scanner(System.in);
 		while(true)
 		{
@@ -38,16 +37,12 @@ public class Main {
 				int offset=scan.nextInt();
 				BTree.InsertNewRecordAtIndex(filename,key,offset);
 			}
-			/*else if(x==3)
+			else if(x==3)
 			{
 				System.out.println("Enter Value to be Searched on.");
 				int key=scan.nextInt();
-				int search=SearchRecordIndex(filename,key);
-				if(search==-1)
-				{
-					System.out.println("Cannot Find Key");
-				}
-			}*/
+				BTree.SearchRecordInIndex(filename,key,32);
+			}
 			else if(x==4)
 				BTree.DisplayIndexFileContent(filename);
 			else if(x==5)
