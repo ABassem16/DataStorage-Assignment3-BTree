@@ -312,7 +312,22 @@ public class BTree
 				return 1;
 			}else if(key < node.getFirstKey())
 			{
-				//to be added
+				
+				int leftPosition=32*(nodenum+1);				
+				Node leftChild = new Node(1,node.getLeftChild(),keys.get(0),offsets.get(0),node.getMiddleChild(),0,0,0);
+				raf.seek(leftPosition);
+				addNode(raf,leftChild);
+				incrementCounter("Index.bin");
+				
+				int rightPosition=32*(nodenum+2);
+				Node rightChild = new Node(1,left,keys.get(2),offsets.get(2),middle,0,0,0);
+				raf.seek(rightPosition);
+				addNode(raf,rightChild);
+				incrementCounter("Index.bin");
+					
+				raf.seek(nodePosition);
+				Node newRoot = new Node(1,leftPosition/32,keys.get(1),offsets.get(1),rightPosition/32,0,0,0);
+				addNode(raf,newRoot);
 				return 1;
 				
 			}else
@@ -426,8 +441,24 @@ public class BTree
 				
 			}else if(key < parent.getFirstKey())
 			{
-				//to be added
-				return 1;
+				if(middle == 0 && left == 0)
+				{
+					leaf = 0;
+				}
+				int leftPosition=nodePosition;
+				Node leftChild = new Node(leaf,left,keys.get(0),offsets.get(0),middle,0,0,0);
+				raf.seek(leftPosition);
+				addNode(raf,leftChild);
+				
+				
+				int rightPosition=32*(nodenum);
+				Node rightChild = new Node(leaf,left,keys.get(2),offsets.get(2),middle,0,0,0);
+				raf.seek(rightPosition);
+				addNode(raf,rightChild);
+				incrementCounter("Index.bin");
+				
+				
+				return splitNode(raf,nodenum,keys.get(1),offsets.get(1),st,leftPosition/32,rightPosition/32,0);
 			}
 			else
 			{
